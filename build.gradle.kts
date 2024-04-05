@@ -21,7 +21,7 @@ plugins {
 }
 
 group = "me.clicks"
-version = "0.0.0"
+version = "0.0.8"
 apply(plugin = "com.dipien.semantic-version")
 
 loom {

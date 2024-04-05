@@ -4,9 +4,12 @@ import gg.essential.elementa.utils.withAlpha
 import me.clicks.Livid
 import me.clicks.Livid.mc
 import me.clicks.utils.*
+import net.minecraft.block.BlockCarpet
+import net.minecraft.block.properties.PropertyEnum
 import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.GlStateManager
 import net.minecraft.init.Blocks
+import net.minecraft.item.EnumDyeColor
 import net.minecraft.util.AxisAlignedBB
 import net.minecraft.util.BlockPos
 import net.minecraft.util.EnumChatFormatting
@@ -23,43 +26,50 @@ import kotlin.math.round
 
 object Pickobulus {
 
-    val blocks = arrayListOf<BlockPos>()
-    val queue = arrayListOf<BlockPos>()
+    val blocks = staticArrayListOf<BlockPos>(1000)
+    val queue = staticArrayListOf<BlockPos>(1000)
+    val checked = staticArrayListOf<BlockPos>(1000)
     var highestDensityBlock: Vec3? = null
     var highestDensityBlockAxisAlignedBB: AxisAlignedBB? = null
     var isRunning = false
     val pickobulusRegex = Regex("^Your Pickobulus destroyed (?<amount>\\d+) blocks!$")
     var isPickobulusReady = false
     var tick = 0
+    var enabled = false
 
     @SubscribeEvent
     fun onClientTick(event: TickEvent.PlayerTickEvent) {
-        if (event.phase != TickEvent.Phase.END) return
+        if (event.phase != TickEvent.Phase.END || !enabled) return
         tick++
-        if (isPickobulusReady &&  tick % 10 == 0) {
+        if (isPickobulusReady &&  tick % 5 == 0) {
             val block = mc.thePlayer.rayTrace(100.0, 1.0f)
             block ?: return
             if (block.blockPos == null) return
             val state = mc.theWorld.getBlockState(block.blockPos)
-            if (state.block != Blocks.prismarine && state.block != Blocks.wool) return
             blocks.clear()
             queue.clear()
+            checked.clear()
+            highestDensityBlock = null
+            highestDensityBlockAxisAlignedBB = null
+            if (state.block != Blocks.prismarine && state.block != Blocks.wool) return
             queue.add(block.blockPos)
             if (!blocks.contains(block.blockPos)) {
                 isRunning = true
-                while (true) {
-                    if (queue.size == 0 || blocks.size >= 1000) break
+                while (queue.size > 0 && blocks.size <= 1000) {
                     val b = queue.removeAt(0)
-                    if (blocks.contains(b)) continue
+                    if (blocks.contains(b) || checked.contains(b)) continue
                     val blockState = mc.theWorld.getBlockState(b)
+                    checked.add(b)
                     if (blockState.block != Blocks.prismarine && blockState.block != Blocks.wool) continue
+                    if (blockState.block == Blocks.wool) {
+                        if (blockState.properties[BlockCarpet.COLOR] != EnumDyeColor.LIGHT_BLUE) continue
+                    }
                     blocks.add(b)
-                    queue.add(b.up())
-                    queue.add(b.down())
-                    queue.add(b.north())
-                    queue.add(b.south())
-                    queue.add(b.east())
-                    queue.add(b.west())
+                    BlockPos.getAllInBox(b.add(-1, -1, -1), b.add(1, 1, 1)).forEach { blockPos ->
+                        if (!checked.contains(blockPos) && !queue.contains(blockPos) && !blocks.contains(blockPos)) {
+                            queue.add(blockPos)
+                        }
+                    }
                 }
                 findBlocksWithHighestDensity(blocks, 6).let { 
                     val xValues = it.map { blockPos -> blockPos.x.toDouble() }
@@ -85,9 +95,10 @@ object Pickobulus {
 
     @SubscribeEvent
     fun onRenderWorldLast(event: RenderWorldLastEvent) {
-
-        for (i in 0 until blocks.size) {
-            val hue = (i.toDouble() / (blocks.size - 1)).toFloat()  // Vary the hue across the blocks
+        if (!enabled) return
+        val copy = blocks.toList()
+        for (i in copy.indices) {
+            val hue = (i.toDouble() / (copy.size - 1)).toFloat()  // Vary the hue across the blocks
 
             // Convert HSB to RGB
             val rgb = Color.HSBtoRGB(hue, .5f, .2f)
@@ -98,18 +109,28 @@ object Pickobulus {
 
             val color = (red shl 16) or (green shl 8) or blue
 
-            val b = blocks[i]
+            val b = copy[i]
             if (b == highestDensityBlock) continue
-            RenderUtil.drawFilled3DBox(b.toAxisAlignedBB().expandBlock(), color, true, true, event.partialTicks)
+            RenderUtil.drawFilled3DBox(b.toAxisAlignedBB().expandBlock(), color,
+                translucent = true,
+                depth = true,
+                partialTicks = event.partialTicks
+            )
         }
         highestDensityBlock ?: return
+        highestDensityBlockAxisAlignedBB ?: return
         RenderUtil.drawFilled3DBox(
-        highestDensityBlockAxisAlignedBB!!.contract(0.4, 0.4, 0.4), 0xffffff, true, false, event.partialTicks)
+            highestDensityBlockAxisAlignedBB!!.contract(0.4, 0.4, 0.4),
+            0xFFFFFF,
+            translucent = true,
+            depth = false,
+            partialTicks = event.partialTicks
+        )
         drawTracer(highestDensityBlock!!, Color(0xB000B5).withAlpha(1f))
     }
 
-    fun findBlocksWithHighestDensity(blocks: ArrayList<BlockPos>, n: Int): Array<BlockPos> {
-        if (blocks.isEmpty() || n <= 0) {
+    fun findBlocksWithHighestDensity(blocks: Iterable<BlockPos?>, n: Int): Array<BlockPos> {
+        if (n <= 0) {
             return arrayOf()
         }
 
@@ -117,6 +138,7 @@ object Pickobulus {
         val blocksWithMaxDensity: ArrayList<BlockPos> = arrayListOf()
 
         for (block in blocks) {
+            if (block == null) continue
             val density = calculateBlocks(blocks, block, n)
             if (density > maxDensity) {
                 maxDensity = density
@@ -129,8 +151,13 @@ object Pickobulus {
         return blocksWithMaxDensity.toTypedArray()
     }
 
-    fun calculateBlocks(blocks: ArrayList<BlockPos>, center: BlockPos, n: Int): Double {
-        return blocks.filter { isWithinCube(center, it, n) }.size.toDouble()
+    fun calculateBlocks(blocks: Iterable<BlockPos?>, center: BlockPos, n: Int): Double {
+        return blocks.filter {
+            if (it != null) {
+                isWithinCube(center, it, n)
+            }
+            false
+        }.size.toDouble()
     }
 
     fun isWithinCube(center: BlockPos, target: BlockPos, n: Int): Boolean {
@@ -148,12 +175,17 @@ object Pickobulus {
         queue.clear()
         highestDensityBlock = null
         isPickobulusReady = false
+        val area = HypixelUtils.getArea()
+        enabled = area == "Dwarven Mines" || area == "Crystal Hollows" || area == "Deep Caverns"
+
     }
 
     @SubscribeEvent()
     fun onChat(event: ClientChatReceivedEvent) {
         if (event.message.unformattedText.stripControlCodes() == "Pickobulus is now available!") {
+            val area = HypixelUtils.getArea()
             isPickobulusReady = true
+            enabled = area == "Dwarven Mines" || area == "Crystal Hollows" || area == "Deep Caverns"
         }
         val result = pickobulusRegex.matchEntire(event.message.unformattedText.stripControlCodes())
         if (result?.groups?.get("amount")?.value != null) {
@@ -209,5 +241,4 @@ object Pickobulus {
         GL11.glDisable(3042)
         GlStateManager.resetColor()
     }
-
 }
