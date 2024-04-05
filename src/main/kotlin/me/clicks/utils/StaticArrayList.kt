@@ -4,12 +4,14 @@ package me.clicks.utils
  * @author Clicks
  */
 class StaticArrayList<T>(val maxSize: Int) : Iterable<T> {
-    private val array: Array<Any?> = Array(maxSize) { null }
+    private var array: Array<Any?> = Array(maxSize) { null }
     var size = 0
         private set
 
     fun add(element: T) {
-        if (size >= maxSize) throw IndexOutOfBoundsException("Array has reached its max size of $maxSize")
+        if (size >= maxSize) {
+            array = array.copyOf(maxSize * 2)
+        }
         array[size++] = element
     }
 
