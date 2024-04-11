@@ -162,9 +162,6 @@ object Pickobulus {
         isPickobulusReady = false
         val area = HypixelUtils.getArea()
         enabled = area == "Dwarven Mines" || area == "Crystal Hollows" || area == "Deep Caverns"
-        if (enabled && !thread.isAlive) {
-            thread.start()
-        }
     }
 
     @SubscribeEvent
@@ -172,18 +169,15 @@ object Pickobulus {
         highestDensityBlock = null
         isPickobulusReady = false
         enabled = false
-        thread.interrupt()
     }
 
     @SubscribeEvent()
     fun onChat(event: ClientChatReceivedEvent) {
-        isPickobulusReady = true
-        enabled = true
-        if (!thread.isAlive) thread.start()
         if (event.message.unformattedText.stripControlCodes() == "Pickobulus is now available!") {
             val area = HypixelUtils.getArea()
-            isPickobulusReady = true
             enabled = area == "Dwarven Mines" || area == "Crystal Hollows" || area == "Deep Caverns"
+            isPickobulusReady = true
+            if (enabled && !thread.isAlive) thread.start()
         }
         if (event.message.unformattedText.stripControlCodes() == "You used your Pickobulus Pickaxe Ability!") {
             highestDensityBlock = null
