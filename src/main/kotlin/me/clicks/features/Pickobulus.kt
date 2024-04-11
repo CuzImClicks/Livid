@@ -97,7 +97,7 @@ object Pickobulus {
 
     @SubscribeEvent
     fun onRenderWorldLast(event: RenderWorldLastEvent) {
-        if (!enabled) return
+        if (!enabled || !isPickobulusReady) return
         highestDensityBlock ?: return
         highestDensityBlockAxisAlignedBB ?: return
         val color = if (mc.thePlayer.rayTrace(5.0, event.partialTicks).blockPos.compareTo(highestDensityBlock!!)) {
