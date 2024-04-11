@@ -21,7 +21,7 @@ plugins {
 }
 
 group = "me.clicks"
-version = "0.0.8"
+version = "0.0.9"
 apply(plugin = "com.dipien.semantic-version")
 
 loom {
@@ -57,11 +57,13 @@ dependencies {
 
     compileOnly("org.spongepowered:mixin:0.8.5-SNAPSHOT")
     annotationProcessor("org.spongepowered:mixin:0.8.5-SNAPSHOT:processor")
+    modRuntimeOnly("me.djtheredstoner:DevAuth-forge-legacy:1.2.0")
 }
 
 repositories {
     maven("https://repo.essential.gg/repository/maven-public")
     maven("https://repo.spongepowered.org/repository/maven-public")
+    maven ("https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1")
 }
 
 tasks {
