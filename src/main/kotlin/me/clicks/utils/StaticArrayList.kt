@@ -52,9 +52,6 @@ class StaticArrayList<T>(val maxSize: Int) : Iterable<T> {
     }
 
     fun clear() {
-        for (i in 0 until size) {
-            array[i] = null
-        }
         size = 0
     }
 
