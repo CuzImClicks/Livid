@@ -113,7 +113,7 @@ object Pickobulus {
             depth = false,
             partialTicks = event.partialTicks
         )
-        drawTracer(highestDensityBlock!!, color)
+        highestDensityBlock?.let { drawTracer(it, color) }
     }
 
     fun findBlocksWithHighestDensity(blocks: Iterable<BlockPos?>, n: Int): Array<BlockPos> {
