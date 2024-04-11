@@ -26,52 +26,47 @@ import kotlin.math.round
 
 object Pickobulus {
 
-    val blocks = staticArrayListOf<BlockPos>(1000)
-    val queue = staticArrayListOf<BlockPos>(1000)
-    val checked = staticArrayListOf<BlockPos>(1000)
+    val blocks = arrayListOf<BlockPos>()
+    val queue = arrayListOf<BlockPos>()
     var highestDensityBlock: Vec3? = null
     var highestDensityBlockAxisAlignedBB: AxisAlignedBB? = null
-    var isRunning = false
     val pickobulusRegex = Regex("^Your Pickobulus destroyed (?<amount>\\d+) blocks!$")
     var isPickobulusReady = false
-    var tick = 0
     var enabled = false
 
-    @SubscribeEvent
-    fun onClientTick(event: TickEvent.PlayerTickEvent) {
-        if (event.phase != TickEvent.Phase.END || !enabled) return
-        tick++
-        if (isPickobulusReady &&  tick % 5 == 0) {
+    val thread = Thread( {
+        while (true) {
+            Thread.sleep(200)
+            mc.thePlayer ?: return@Thread
+            mc.theWorld ?: return@Thread
             val block = mc.thePlayer.rayTrace(100.0, 1.0f)
-            block ?: return
-            if (block.blockPos == null) return
+            block ?: continue
+            if (block.blockPos == null) continue
             val state = mc.theWorld.getBlockState(block.blockPos)
             blocks.clear()
             queue.clear()
-            checked.clear()
             highestDensityBlock = null
             highestDensityBlockAxisAlignedBB = null
-            if (state.block != Blocks.prismarine && state.block != Blocks.wool) return
+            if (state.block != Blocks.prismarine && state.block != Blocks.wool) continue
             queue.add(block.blockPos)
             if (!blocks.contains(block.blockPos)) {
-                isRunning = true
                 while (queue.size > 0 && blocks.size <= 1000) {
                     val b = queue.removeAt(0)
-                    if (blocks.contains(b) || checked.contains(b)) continue
+                    if (blocks.contains(b)) continue
                     val blockState = mc.theWorld.getBlockState(b)
-                    checked.add(b)
                     if (blockState.block != Blocks.prismarine && blockState.block != Blocks.wool) continue
                     if (blockState.block == Blocks.wool) {
                         if (blockState.properties[BlockCarpet.COLOR] != EnumDyeColor.LIGHT_BLUE) continue
                     }
                     blocks.add(b)
-                    BlockPos.getAllInBox(b.add(-1, -1, -1), b.add(1, 1, 1)).forEach { blockPos ->
-                        if (!checked.contains(blockPos) && !queue.contains(blockPos) && !blocks.contains(blockPos)) {
+                    val blocksInBox = BlockPos.getAllInBox(b.add(-1, -1, -1), b.add(1, 1, 1))
+                    blocksInBox.forEach { blockPos ->
+                        if (!queue.contains(blockPos) && !blocks.contains(blockPos)) {
                             queue.add(blockPos)
                         }
                     }
                 }
-                findBlocksWithHighestDensity(blocks, 6).let { 
+                findBlocksWithHighestDensity(blocks, 6).let {
                     val xValues = it.map { blockPos -> blockPos.x.toDouble() }
                     val yValues = it.map { blockPos -> blockPos.y.toDouble() }
                     val zValues = it.map { blockPos -> blockPos.z.toDouble() }
@@ -88,35 +83,33 @@ object Pickobulus {
                         highestDensityBlock!!.zCoord + 1,
                     )
                 }
-                isRunning = false
             }
         }
-    }
+    }, "Pickobulus")
 
     @SubscribeEvent
     fun onRenderWorldLast(event: RenderWorldLastEvent) {
         if (!enabled) return
-        val copy = blocks.toList()
-        for (i in copy.indices) {
-            val hue = (i.toDouble() / (copy.size - 1)).toFloat()  // Vary the hue across the blocks
-
-            // Convert HSB to RGB
-            val rgb = Color.HSBtoRGB(hue, .5f, .2f)
-
-            val red = rgb shr 16 and 0xFF
-            val green = rgb shr 8 and 0xFF
-            val blue = rgb and 0xFF
-
-            val color = (red shl 16) or (green shl 8) or blue
-
-            val b = copy[i]
-            if (b == highestDensityBlock) continue
-            RenderUtil.drawFilled3DBox(b.toAxisAlignedBB().expandBlock(), color,
-                translucent = true,
-                depth = true,
-                partialTicks = event.partialTicks
-            )
-        }
+        //val copy = blocks.toList()
+        //for (i in copy.indices) {
+        //    val hue = (i.toDouble() / (copy.size - 1)).toFloat()  // Vary the hue across the blocks
+//
+        //    val rgb = Color.HSBtoRGB(hue, .5f, .2f)
+//
+        //    val red = rgb shr 16 and 0xFF
+        //    val green = rgb shr 8 and 0xFF
+        //    val blue = rgb and 0xFF
+//
+        //    val color = (red shl 16) or (green shl 8) or blue
+//
+        //    val b = copy[i]
+        //    if (b == highestDensityBlock) continue
+        //    RenderUtil.drawFilled3DBox(b.toAxisAlignedBB().expandBlock(), color,
+        //        translucent = true,
+        //        depth = true,
+        //        partialTicks = event.partialTicks
+        //    )
+        //}
         highestDensityBlock ?: return
         highestDensityBlockAxisAlignedBB ?: return
         RenderUtil.drawFilled3DBox(
@@ -177,15 +170,36 @@ object Pickobulus {
         isPickobulusReady = false
         val area = HypixelUtils.getArea()
         enabled = area == "Dwarven Mines" || area == "Crystal Hollows" || area == "Deep Caverns"
+        if (enabled && !thread.isAlive) {
+            thread.start()
+        }
+    }
 
+    @SubscribeEvent
+    fun onWorldChange(event: WorldEvent.Unload) {
+        blocks.clear()
+        queue.clear()
+        highestDensityBlock = null
+        isPickobulusReady = false
+        enabled = false
+        thread.interrupt()
     }
 
     @SubscribeEvent()
     fun onChat(event: ClientChatReceivedEvent) {
+        isPickobulusReady = true
+        enabled = true
+        if (!thread.isAlive) thread.start()
         if (event.message.unformattedText.stripControlCodes() == "Pickobulus is now available!") {
             val area = HypixelUtils.getArea()
-            isPickobulusReady = true
-            enabled = area == "Dwarven Mines" || area == "Crystal Hollows" || area == "Deep Caverns"
+            //isPickobulusReady = true
+            //enabled = area == "Dwarven Mines" || area == "Crystal Hollows" || area == "Deep Caverns"
+        }
+        if (event.message.unformattedText.stripControlCodes() == "You used your Pickobulus Pickaxe Ability!") {
+            blocks.clear()
+            queue.clear()
+            highestDensityBlock = null
+            isPickobulusReady = false
         }
         val result = pickobulusRegex.matchEntire(event.message.unformattedText.stripControlCodes())
         if (result?.groups?.get("amount")?.value != null) {
@@ -202,10 +216,6 @@ object Pickobulus {
                 if (amount < 214) {
                     mc.thePlayer.addChatMessage("${EnumChatFormatting.GOLD}${214 - amount} ${EnumChatFormatting.GRAY}blocks were not destroyed")
                 }
-                blocks.clear()
-                queue.clear()
-                highestDensityBlock = null
-                isPickobulusReady = false
             }
         }
     }
