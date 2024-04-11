@@ -13,6 +13,7 @@ import java.io.File
 import java.util.*
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
+import kotlin.math.roundToInt
 
 object Utils {
 
@@ -267,3 +268,8 @@ fun getRainbowColor2(): Int {
 
 fun AxisAlignedBB.expandBlock(): AxisAlignedBB =
     expand(0.0020000000949949026, 0.0020000000949949026, 0.0020000000949949026)
+
+
+fun BlockPos.compareTo(vec3: Vec3): Boolean {
+    return this.x == vec3.xCoord.roundToInt() && this.y == vec3.yCoord.roundToInt() && this.z == vec3.zCoord.roundToInt()
+}
