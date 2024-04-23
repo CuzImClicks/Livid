@@ -26,16 +26,18 @@ object Pickobulus {
 
     var highestDensityBlock: Vec3? = null
     var highestDensityBlockAxisAlignedBB: AxisAlignedBB? = null
+    
     val pickobulusRegex = Regex("^Your Pickobulus destroyed (?<amount>\\d+) blocks!$")
     var isPickobulusReady = false
     var enabled = false
 
+    // the thread running in the background detecting the blocks
     val thread = Thread( {
         while (enabled) {
             Thread.sleep(200)
             mc.thePlayer ?: return@Thread
             mc.theWorld ?: return@Thread
-            val block = mc.thePlayer.rayTrace(100.0, 1.0f)
+            val block = mc.thePlayer.rayTrace(100.0, 1.0f) // might change to pickobulus range
             block ?: continue
             if (block.blockPos == null) {
                 highestDensityBlock = null
@@ -43,7 +45,7 @@ object Pickobulus {
                 continue
             }
             val state = mc.theWorld.getBlockState(block.blockPos)
-            if (state.block != Blocks.prismarine && state.block != Blocks.wool) {
+            if (state.block != Blocks.prismarine && state.block != Blocks.wool) { // when we look at stone
                 highestDensityBlock = null
                 highestDensityBlockAxisAlignedBB = null
                 continue
@@ -55,8 +57,8 @@ object Pickobulus {
                     continue
                 }
             }
-            val q = arrayListOf(block.blockPos)
-            val bs: ArrayList<BlockPos> = arrayListOf()
+            val q = arrayListOf(block.blockPos) // queue
+            val bs: ArrayList<BlockPos> = arrayListOf() // blocks
             if (!bs.contains(block.blockPos)) {
                 while (q.size > 0) {
                     val b = q.removeAt(0)
@@ -67,7 +69,7 @@ object Pickobulus {
                         if (blockState.properties[BlockCarpet.COLOR] != EnumDyeColor.LIGHT_BLUE) continue
                     }
                     bs.add(b)
-                    val blocksInBox = BlockPos.getAllInBox(b.add(-1, -1, -1), b.add(1, 1, 1))
+                    val blocksInBox = BlockPos.getAllInBox(b.add(-1, -1, -1), b.add(1, 1, 1)
                     blocksInBox.forEach { blockPos ->
                         if (!q.contains(blockPos) && !bs.contains(blockPos)) {
                             q.add(blockPos)
@@ -75,6 +77,9 @@ object Pickobulus {
                     }
                 }
                 findBlocksWithHighestDensity(bs, 6).let {
+                    // doesnt work when we have two maxima apart from eachother
+                    // since crystal hollows mithril veins have only one nucleus
+                    // if we have two maxima right next to eachother it takes the middle of the two
                     val xValues = it.map { blockPos -> blockPos.x.toDouble() }
                     val yValues = it.map { blockPos -> blockPos.y.toDouble() }
                     val zValues = it.map { blockPos -> blockPos.z.toDouble() }
