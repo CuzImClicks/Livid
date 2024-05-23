@@ -30,11 +30,13 @@ object Pickobulus {
     val pickobulusRegex = Regex("^Your Pickobulus destroyed (?<amount>\\d+) blocks!$")
     var isPickobulusReady = false
     var enabled = false
+    var lastUsed: Long? = null
 
     // the thread running in the background detecting the blocks
     val thread = Thread( {
         while (enabled) {
             Thread.sleep(200)
+            if (lastUsed != null && System.currentTimeMillis() - lastUsed!! > 120000L) isPickobulusReady = true
             mc.thePlayer ?: return@Thread
             mc.theWorld ?: return@Thread
             val block = mc.thePlayer.rayTrace(100.0, 1.0f) // might change to pickobulus range
@@ -69,7 +71,7 @@ object Pickobulus {
                         if (blockState.properties[BlockCarpet.COLOR] != EnumDyeColor.LIGHT_BLUE) continue
                     }
                     bs.add(b)
-                    val blocksInBox = BlockPos.getAllInBox(b.add(-1, -1, -1), b.add(1, 1, 1)
+                    val blocksInBox = BlockPos.getAllInBox(b.add(-1, -1, -1), b.add(1, 1, 1))
                     blocksInBox.forEach { blockPos ->
                         if (!q.contains(blockPos) && !bs.contains(blockPos)) {
                             q.add(blockPos)
@@ -188,6 +190,7 @@ object Pickobulus {
             highestDensityBlock = null
             highestDensityBlockAxisAlignedBB = null
             isPickobulusReady = false
+            lastUsed = System.currentTimeMillis()
         }
         val result = pickobulusRegex.matchEntire(event.message.unformattedText.stripControlCodes())
         if (result?.groups?.get("amount")?.value != null) {
